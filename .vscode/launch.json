@@ -1,0 +1,53 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Run FastAPI (uvicorn)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "uvicorn",
+      "cwd": "${workspaceFolder}/app",
+      "args": [
+        "main:app",
+        "--reload",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "8000"
+      ],
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}/app"
+      },
+      "jinja": true,
+      "justMyCode": true
+    },
+    {
+      "name": "Run Pytest",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "pytest",
+      "cwd": "${workspaceFolder}",
+      "args": [
+        "-q"
+      ],
+      "env": {
+        "PYTHONPATH": "${workspaceFolder};${workspaceFolder}/app"
+      },
+      "justMyCode": true
+    },
+    {
+      "name": "Install Dependencies",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "pip",
+      "cwd": "${workspaceFolder}",
+      "args": [
+        "install",
+        "-e",
+        ".[dev]"
+      ],
+      "console": "integratedTerminal",
+      "justMyCode": false
+    }
+  ]
+}

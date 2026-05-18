@@ -1,0 +1,22 @@
+meta {
+  name: Chat Endpoint
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/v1/chat/ask
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "username": "scott",
+    "message": "Plan me a 3 day NYC itinerary"
+  }
+}
