@@ -9,27 +9,48 @@ Nx monorepo for the itinerary maker chat experience.
 
 ## Run locally
 
-Install the Node workspace dependencies:
+### 1. Install dependencies
+
+Install the Node workspace dependencies (Nx, Vite, etc.):
 
 ```bash
 pnpm install
 ```
 
-Install the API dependencies:
+Install the Python API dependencies:
 
 ```bash
 cd apps/chat-api
 uv sync --all-extras
+cd ../..
 ```
 
-Run the API and UI from the repo root:
+### 2. Start both apps
+
+Run both apps in parallel from the repo root with a single command:
 
 ```bash
+pnpm nx run-many --target=serve --all --parallel
+```
+
+Or start them individually in separate terminals:
+
+```bash
+# Terminal 1 - FastAPI backend
 pnpm nx serve chat-api
+
+# Terminal 2 - Vite + React frontend
 pnpm nx serve chat-ui
 ```
 
-The UI runs on Vite’s dev server and talks to the API over `/api/v1/*`.
+### Default ports
+
+| App      | Default URL           | Env var    |
+|----------|-----------------------|------------|
+| chat-api | http://127.0.0.1:8000 | `API_PORT` |
+| chat-ui  | http://127.0.0.1:5173 | `UI_PORT`  |
+
+Both ports can be overridden via a `.env` file at the repo root. The UI dev server proxies all `/api/*` requests to the API, so no CORS configuration is needed during development.
 
 ## Redis cache
 
@@ -56,4 +77,3 @@ If Redis is unavailable, the API still works and falls back to non-cached respon
 ```bash
 pnpm nx run chat-api:test
 ```
-
