@@ -1,17 +1,20 @@
 import json
 import re
 import uuid
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, TypedDict
+
 from openai import OpenAI
 from redis import Redis
-from app.services.configuration_service import ConfigurationService
-from datetime import datetime, timedelta, timezone
+
+from chat_api.services.configuration_service import ConfigurationService
 
 
 class ChatResult(TypedDict):
     response: str
     ics_download_url: str | None
+
 
 class AIService:
     """Service layer for API status-related responses."""
@@ -26,16 +29,15 @@ class AIService:
         self.init_ai_client()
         self.init_cache_client()
 
-
     def get_ai_response(self, username: str, message: str) -> ChatResult:
-        system_prompt_request= {
+        system_prompt_request = {
             "role": "system",
-            "content": self.env_service.get_ai_system_prompt()
+            "content": self.env_service.get_ai_system_prompt(),
         }
 
         user_message_request = {
             "role": "user",
-            "content": message
+            "content": message,
         }
 
         ai_model = self.env_service.get("AI_MODEL")
@@ -137,10 +139,7 @@ class AIService:
                                             "type": "string",
                                             "description": "ISO date or datetime (for example 2026-08-01 or 2026-08-01T09:00:00).",
                                         },
-                                        "end": {
-                                            "type": "string",
-                                            "description": "ISO date or datetime.",
-                                        },
+                                        "end": {"type": "string"},
                                         "all_day": {"type": "boolean"},
                                         "location": {"type": "string"},
                                         "description": {"type": "string"},
@@ -195,8 +194,8 @@ class AIService:
 
     @classmethod
     def get_ics_directory(cls) -> Path:
-        base_dir = Path(__file__).resolve().parents[2]
-        output_dir = base_dir / cls.ICS_DIR_NAME
+        app_root = Path(__file__).resolve().parents[3]
+        output_dir = app_root / cls.ICS_DIR_NAME
         output_dir.mkdir(parents=True, exist_ok=True)
         return output_dir
 
@@ -281,7 +280,6 @@ class AIService:
             else:
                 end_date = start_date
 
-            # ICS all-day DTEND is exclusive, so add one day.
             end_exclusive = end_date + timedelta(days=1)
             event_lines.append(f"DTSTART;VALUE=DATE:{start_date.strftime('%Y%m%d')}")
             event_lines.append(f"DTEND;VALUE=DATE:{end_exclusive.strftime('%Y%m%d')}")
@@ -347,7 +345,7 @@ class AIService:
             "username": username.strip(),
             "question": question,
             "answer": answer,
-            "timestamp": datetime.now(timezone.utc).isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
         if self.cache_client:
@@ -440,4 +438,3 @@ class AIService:
             self.cache_client.setex(cache_key, self.cache_ttl_seconds, response)
         except Exception:
             pass
-

@@ -1,0 +1,24 @@
+{
+  "name": "itinerary-maker",
+  "private": true,
+  "packageManager": "pnpm@9.0.0",
+  "scripts": {
+    "dev": "nx run-many --target=serve --projects=chat-api,chat-ui --parallel",
+    "serve:chat-api": "nx run chat-api:serve",
+    "serve:chat-ui": "nx run chat-ui:serve",
+    "test:chat-api": "nx run chat-api:test"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.4",
+    "nx": "^20.0.0",
+    "typescript": "^5.8.0",
+    "vite": "^6.0.0"
+  },
+  "dependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

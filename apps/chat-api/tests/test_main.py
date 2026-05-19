@@ -1,6 +1,6 @@
 from fastapi.testclient import TestClient
 
-from app.main import app
+from chat_api.main import app
 
 client = TestClient(app)
 
@@ -8,10 +8,10 @@ client = TestClient(app)
 def test_root() -> None:
     response = client.get("/")
     assert response.status_code == 200
-    assert response.json() == {"message": "Itinerary Maker API is running"}
+    assert response.json() == {"message": "chat-api is running"}
 
 
 def test_health() -> None:
-    response = client.get("/health")
+    response = client.get("/api/v1/health")
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}

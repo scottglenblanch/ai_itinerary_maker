@@ -1,15 +1,35 @@
 # Itinerary Maker
 
-FastAPI starter project.
+Nx monorepo for the itinerary maker chat experience.
+
+## Workspace layout
+
+- `apps/chat-api` - FastAPI backend for chat, history, and ICS generation
+- `apps/chat-ui` - Vite + React frontend for the chat experience
 
 ## Run locally
 
+Install the Node workspace dependencies:
+
 ```bash
-python -m pip install -e .
-uvicorn app.main:app --reload
+pnpm install
 ```
 
-Then open `http://127.0.0.1:8000`.
+Install the API dependencies:
+
+```bash
+cd apps/chat-api
+uv sync --all-extras
+```
+
+Run the API and UI from the repo root:
+
+```bash
+pnpm nx serve chat-api
+pnpm nx serve chat-ui
+```
+
+The UI runs on Vite’s dev server and talks to the API over `/api/v1/*`.
 
 ## Redis cache
 
@@ -24,7 +44,16 @@ If Redis is unavailable, the API still works and falls back to non-cached respon
 
 ## Helpful endpoints
 
-- `GET /chat` - simple HTML UI for asking questions
+- `GET /` - chat-api status message
 - `GET /api/v1/health` - health check
-- `POST /api/v1/chat` - chat request endpoint
+- `POST /api/v1/chat/ask` - chat request endpoint
+- `POST /api/v1/chat/history` - chat history lookup
+- `GET /api/v1/chat/ics/{file_id}` - download an ICS file
 - `GET /docs` - interactive OpenAPI docs
+
+## Validation
+
+```bash
+pnpm nx run chat-api:test
+```
+

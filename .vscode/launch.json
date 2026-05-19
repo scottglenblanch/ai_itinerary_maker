@@ -2,22 +2,15 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Run FastAPI (uvicorn)",
+      "name": "Run chat-api (uvicorn)",
       "type": "debugpy",
       "request": "launch",
-      "module": "uvicorn",
-      "cwd": "${workspaceFolder}/app",
-      "args": [
-        "main:app",
-        "--reload",
-        "--host",
-        "127.0.0.1",
-        "--port",
-        "8000"
-      ],
+      "module": "chat_api.serve",
+      "cwd": "${workspaceFolder}/apps/chat-api",
       "env": {
-        "PYTHONPATH": "${workspaceFolder}/app"
+        "PYTHONPATH": "${workspaceFolder}/apps/chat-api/src"
       },
+      "envFile": "${workspaceFolder}/.env",
       "jinja": true,
       "justMyCode": true
     },
@@ -31,7 +24,7 @@
         "-q"
       ],
       "env": {
-        "PYTHONPATH": "${workspaceFolder};${workspaceFolder}/app"
+        "PYTHONPATH": "${workspaceFolder};${workspaceFolder}/apps/chat-api/src"
       },
       "justMyCode": true
     },
@@ -40,7 +33,7 @@
       "type": "debugpy",
       "request": "launch",
       "module": "pip",
-      "cwd": "${workspaceFolder}",
+      "cwd": "${workspaceFolder}/apps/chat-api",
       "args": [
         "install",
         "-e",
@@ -51,3 +44,4 @@
     }
   ]
 }
+

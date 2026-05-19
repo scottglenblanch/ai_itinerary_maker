@@ -4,3 +4,8 @@ __pycache__/
 .coverage
 *.pyc
 .env
+node_modules/
+.nx/
+dist/
+apps/chat-ui/dist/
+apps/chat-api/generated_ics/

@@ -1,0 +1,22 @@
+{
+  "name": "chat-api",
+  "root": "apps/chat-api",
+  "sourceRoot": "apps/chat-api/src",
+  "projectType": "application",
+  "targets": {
+    "serve": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "apps/chat-api",
+        "command": "uv run python -m chat_api.serve"
+      }
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "apps/chat-api",
+        "command": "uv run pytest -q"
+      }
+    }
+  }
+}

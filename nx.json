@@ -1,0 +1,22 @@
+{
+  "$schema": "./node_modules/nx/schemas/nx-schema.json",
+  "workspaceLayout": {
+    "appsDir": "apps",
+    "libsDir": "libs"
+  },
+  "targetDefaults": {
+    "serve": {
+      "cache": false
+    },
+    "test": {
+      "cache": true
+    },
+    "build": {
+      "cache": true
+    }
+  },
+  "namedInputs": {
+    "default": ["{projectRoot}/**/*", "sharedGlobals"],
+    "sharedGlobals": []
+  }
+}

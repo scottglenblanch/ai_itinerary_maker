@@ -1,0 +1,22 @@
+{
+  "name": "chat-ui",
+  "root": "apps/chat-ui",
+  "sourceRoot": "apps/chat-ui/src",
+  "projectType": "application",
+  "targets": {
+    "serve": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "apps/chat-ui",
+        "command": "pnpm exec vite --host 127.0.0.1"
+      }
+    },
+    "build": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "apps/chat-ui",
+        "command": "pnpm exec vite build"
+      }
+    }
+  }
+}
