@@ -1,8 +1,6 @@
 import json
 import re
-import uuid
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
 from typing import Any, TypedDict
 
 from openai import OpenAI
@@ -13,7 +11,7 @@ from chat_api.services.configuration_service import ConfigurationService
 
 class ChatResult(TypedDict):
     response: str
-    ics_download_url: str | None
+    ics_payload_json: str | None
 
 
 class AIService:
@@ -23,7 +21,6 @@ class AIService:
     cache_client = None
     env_service = ConfigurationService()
     chat_history: dict[str, list[dict[str, str]]] = {}
-    ICS_DIR_NAME = "generated_ics"
 
     def __init__(self):
         self.init_ai_client()
@@ -62,7 +59,7 @@ class AIService:
         )
 
         choice_message = ai_response.choices[0].message
-        ics_download_url: str | None = None
+        ics_payload_json: str | None = None
 
         if choice_message.tool_calls:
             assistant_tool_message = {
@@ -84,8 +81,8 @@ class AIService:
 
             for tool_call in choice_message.tool_calls:
                 tool_result = self._run_tool_call(tool_call, username)
-                if isinstance(tool_result, dict) and tool_result.get("download_url"):
-                    ics_download_url = str(tool_result["download_url"])
+                if isinstance(tool_result, dict) and tool_result.get("ics_payload_json"):
+                    ics_payload_json = str(tool_result["ics_payload_json"])
 
                 messages_request.append(
                     {
@@ -107,7 +104,7 @@ class AIService:
 
         return {
             "response": message_content,
-            "ics_download_url": ics_download_url,
+            "ics_payload_json": ics_payload_json,
         }
 
     def _get_tool_definitions(self) -> list[dict[str, Any]]:
@@ -115,8 +112,8 @@ class AIService:
             {
                 "type": "function",
                 "function": {
-                    "name": "create_ics_file",
-                    "description": "Create an ICS calendar file from itinerary events and return a download URL.",
+                    "name": "generate_ics_payload_json",
+                    "description": "Generate an ICS-ready JSON string from itinerary events.",
                     "parameters": {
                         "type": "object",
                         "properties": {
@@ -126,7 +123,7 @@ class AIService:
                             },
                             "filename": {
                                 "type": "string",
-                                "description": "Base file name to use for the ICS file.",
+                                "description": "Base file name to use when creating an ICS file.",
                             },
                             "events": {
                                 "type": "array",
@@ -164,65 +161,37 @@ class AIService:
         except json.JSONDecodeError:
             return {"ok": False, "error": "Tool arguments were not valid JSON."}
 
-        if function_name == "create_ics_file":
-            return self._tool_create_ics_file(arguments, username)
+        if function_name == "generate_ics_payload_json":
+            return self._tool_generate_ics_payload_json(arguments, username)
 
         return {"ok": False, "error": f"Unknown tool: {function_name}"}
 
-    def _tool_create_ics_file(self, arguments: dict[str, Any], username: str) -> dict[str, Any]:
+    def _tool_generate_ics_payload_json(self, arguments: dict[str, Any], username: str) -> dict[str, Any]:
         calendar_name = str(arguments.get("calendar_name") or "Trip Itinerary")
         requested_filename = str(arguments.get("filename") or f"{username}-itinerary")
         events = arguments.get("events")
 
         if not isinstance(events, list) or len(events) == 0:
-            return {"ok": False, "error": "At least one event is required to create an ICS file."}
+            return {"ok": False, "error": "At least one event is required to generate ICS payload JSON."}
 
         try:
-            file_id, file_name = self._create_ics_file(calendar_name, requested_filename, events)
+            payload_json = self._create_ics_payload_json(calendar_name, requested_filename, events)
         except ValueError as exc:
             return {"ok": False, "error": str(exc)}
         except Exception:
-            return {"ok": False, "error": "Failed to create ICS file."}
+            return {"ok": False, "error": "Failed to generate ICS payload JSON."}
+
+        file_name = f"{self._sanitize_filename(requested_filename)}.ics"
 
         return {
             "ok": True,
-            "file_id": file_id,
             "file_name": file_name,
-            "download_url": f"/api/v1/chat/ics/{file_id}",
+            "ics_payload_json": payload_json,
             "event_count": len(events),
         }
 
-    @classmethod
-    def get_ics_directory(cls) -> Path:
-        app_root = Path(__file__).resolve().parents[3]
-        output_dir = app_root / cls.ICS_DIR_NAME
-        output_dir.mkdir(parents=True, exist_ok=True)
-        return output_dir
-
-    @classmethod
-    def get_ics_file_path(cls, file_id: str) -> Path | None:
-        if not re.fullmatch(r"[A-Za-z0-9_-]+\.ics", file_id):
-            return None
-
-        candidate = (cls.get_ics_directory() / file_id).resolve()
-        if cls.get_ics_directory().resolve() not in candidate.parents:
-            return None
-
-        return candidate
-
-    def _create_ics_file(self, calendar_name: str, requested_filename: str, events: list[Any]) -> tuple[str, str]:
-        safe_name = self._sanitize_filename(requested_filename)
-        unique_suffix = uuid.uuid4().hex[:8]
-        file_name = f"{safe_name}-{unique_suffix}.ics"
-        output_path = self.get_ics_directory() / file_name
-
-        lines: list[str] = [
-            "BEGIN:VCALENDAR",
-            "VERSION:2.0",
-            "PRODID:-//Itinerary Maker//EN",
-            "CALSCALE:GREGORIAN",
-            f"X-WR-CALNAME:{self._escape_ics_text(calendar_name)}",
-        ]
+    def _create_ics_payload_json(self, calendar_name: str, requested_filename: str, events: list[Any]) -> str:
+        normalized_events: list[dict[str, Any]] = []
 
         for raw_event in events:
             if not isinstance(raw_event, dict):
@@ -238,68 +207,49 @@ class AIService:
             location = str(raw_event.get("location") or "")
             description = str(raw_event.get("description") or "")
 
-            lines.extend(
-                self._build_ics_event_lines(
-                    title=title,
-                    start_raw=start_raw,
-                    end_raw=end_raw if isinstance(end_raw, str) else None,
-                    all_day=all_day,
-                    location=location,
-                    description=description,
+            if all_day:
+                start_date = self._parse_iso_date(start_raw)
+                if isinstance(end_raw, str) and end_raw.strip():
+                    end_date = self._parse_iso_date(end_raw)
+                else:
+                    end_date = start_date
+
+                normalized_events.append(
+                    {
+                        "title": title,
+                        "start": start_date.isoformat(),
+                        "end": end_date.isoformat(),
+                        "all_day": True,
+                        "location": location,
+                        "description": description,
+                    }
                 )
-            )
+                continue
 
-        lines.append("END:VCALENDAR")
-
-        output_path.write_text("\r\n".join(lines) + "\r\n", encoding="utf-8")
-        return file_name, file_name
-
-    def _build_ics_event_lines(
-        self,
-        title: str,
-        start_raw: str,
-        end_raw: str | None,
-        all_day: bool,
-        location: str,
-        description: str,
-    ) -> list[str]:
-        uid = f"{uuid.uuid4()}@itinerary-maker"
-        dtstamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-
-        event_lines = [
-            "BEGIN:VEVENT",
-            f"UID:{uid}",
-            f"DTSTAMP:{dtstamp}",
-            f"SUMMARY:{self._escape_ics_text(title)}",
-        ]
-
-        if all_day:
-            start_date = self._parse_iso_date(start_raw)
-            if end_raw:
-                end_date = self._parse_iso_date(end_raw)
-            else:
-                end_date = start_date
-
-            end_exclusive = end_date + timedelta(days=1)
-            event_lines.append(f"DTSTART;VALUE=DATE:{start_date.strftime('%Y%m%d')}")
-            event_lines.append(f"DTEND;VALUE=DATE:{end_exclusive.strftime('%Y%m%d')}")
-        else:
             start_dt = self._parse_iso_datetime(start_raw)
-            if end_raw:
+            if isinstance(end_raw, str) and end_raw.strip():
                 end_dt = self._parse_iso_datetime(end_raw)
             else:
                 end_dt = start_dt + timedelta(hours=1)
 
-            event_lines.append(f"DTSTART:{start_dt.strftime('%Y%m%dT%H%M%SZ')}")
-            event_lines.append(f"DTEND:{end_dt.strftime('%Y%m%dT%H%M%SZ')}")
+            normalized_events.append(
+                {
+                    "title": title,
+                    "start": start_dt.isoformat(),
+                    "end": end_dt.isoformat(),
+                    "all_day": False,
+                    "location": location,
+                    "description": description,
+                }
+            )
 
-        if location:
-            event_lines.append(f"LOCATION:{self._escape_ics_text(location)}")
-        if description:
-            event_lines.append(f"DESCRIPTION:{self._escape_ics_text(description)}")
+        payload = {
+            "calendar_name": calendar_name,
+            "filename": f"{self._sanitize_filename(requested_filename)}.ics",
+            "events": normalized_events,
+        }
 
-        event_lines.append("END:VEVENT")
-        return event_lines
+        return json.dumps(payload)
 
     def _sanitize_filename(self, filename: str) -> str:
         cleaned = re.sub(r"[^A-Za-z0-9._-]+", "-", filename.strip().lower())
@@ -332,13 +282,6 @@ class AIService:
             parsed = parsed.astimezone(timezone.utc)
 
         return parsed
-
-    def _escape_ics_text(self, value: str) -> str:
-        escaped = value.replace("\\", "\\\\")
-        escaped = escaped.replace(";", "\\;")
-        escaped = escaped.replace(",", "\\,")
-        escaped = escaped.replace("\n", "\\n")
-        return escaped
 
     def _append_chat_history(self, username: str, question: str, answer: str) -> None:
         chat_object = {

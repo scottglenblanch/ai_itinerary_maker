@@ -1,7 +1,6 @@
 from typing import TypedDict
 
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse
+from fastapi import FastAPI
 from pydantic import BaseModel
 
 from chat_api.services.ai_service import AIService
@@ -14,7 +13,7 @@ class ChatRequest(BaseModel):
 
 class ChatResponse(BaseModel):
     response: str
-    ics_download_url: str | None = None
+    ics_payload_json: str | None = None
 
 
 class ChatHistoryRequest(BaseModel):
@@ -41,16 +40,10 @@ def root() -> dict[str, str]:
 @app.post("/api/v1/chat/ask", response_model=ChatResponse, status_code=200)
 def make_chat_call(body: ChatRequest) -> ChatResponse:
     ai_result = AIService().get_ai_response(body.username, body.message)
-    return ChatResponse(response=ai_result["response"], ics_download_url=ai_result["ics_download_url"])
-
-
-@app.get("/api/v1/chat/ics/{file_id}")
-def download_ics_file(file_id: str) -> FileResponse:
-    file_path = AIService.get_ics_file_path(file_id)
-    if file_path is None or not file_path.exists():
-        raise HTTPException(status_code=404, detail="ICS file not found")
-
-    return FileResponse(file_path, media_type="text/calendar", filename=file_path.name)
+    return ChatResponse(
+        response=ai_result["response"],
+        ics_payload_json=ai_result["ics_payload_json"],
+    )
 
 
 @app.post("/api/v1/chat/history", response_model=ChatHistoryResponse, status_code=200)
