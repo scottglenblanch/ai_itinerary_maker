@@ -181,6 +181,7 @@ export function useChatAssistant({ username, message, clearMessage, refreshHisto
         start: eventInput.start,
         end: eventInput.end,
         desc: eventInput.desc,
+        cost: eventInput.cost,
       },
     ]);
   }

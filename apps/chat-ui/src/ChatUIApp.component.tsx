@@ -3,11 +3,14 @@ import type { FormEvent } from 'react';
 import EventCalendar from './EventCalendar.component';
 import ChatForm from './ChatForm.component';
 import HistoryPanel from './HistoryPanel.component';
-import StatusCard from './StatusCard.component';
 import { useChatAssistant } from './hooks/useChatAssistant.hook';
 import { useCalendarStatus } from './hooks/useCalendarStatus.hook';
 import { useChatHistory } from './hooks/useChatHistory.hook';
+import { downloadCalendarEventsAsIcs } from './services/icsExport.service';
+import { getLocaleCurrencySymbol } from './services/locale.service';
 import type { CalendarEvent, CalendarSlotSelection } from './types';
+
+const CURRENCY_SYMBOL = getLocaleCurrencySymbol();
 
 function toDateTimeLocalValue(date: Date) {
   const offsetMs = date.getTimezoneOffset() * 60000;
@@ -21,6 +24,7 @@ export default function ChatUIApp() {
   const [manualStart, setManualStart] = useState('');
   const [manualEnd, setManualEnd] = useState('');
   const [manualDescription, setManualDescription] = useState('');
+  const [manualCost, setManualCost] = useState('0');
   const { status, setStatus, handleCalendarNavigate, handleCalendarViewChange } = useCalendarStatus();
 
   const { history, historyMessage, expandedIndex, setExpandedIndex, refreshHistory } = useChatHistory(username);
@@ -47,6 +51,16 @@ export default function ChatUIApp() {
       setStatus({ tone: 'success', message: 'Redid last calendar event change.' });
     }
   }, [redoEvents, setStatus]);
+
+  const handleExportAction = useCallback(() => {
+    if (events.length === 0) {
+      setStatus({ tone: 'error', message: 'No events to export yet.' });
+      return;
+    }
+
+    downloadCalendarEventsAsIcs(events);
+    setStatus({ tone: 'success', message: `Exported ${events.length} event${events.length === 1 ? '' : 's'} to an .ics file.` });
+  }, [events, setStatus]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -111,15 +125,26 @@ export default function ChatUIApp() {
       return;
     }
 
+    const costRaw = manualCost.trim();
+    const parsedCost = Number(costRaw);
+    if (costRaw === '' || Number.isNaN(parsedCost) || parsedCost < 0) {
+      setStatus({ tone: 'error', message: 'Cost is required and must be a non-negative number.' });
+      return;
+    }
+
+    const cost = parsedCost;
+
     addManualEvent({
       title,
       start,
       end,
       desc: manualDescription.trim() || undefined,
+      cost,
     });
 
     setManualTitle('');
     setManualDescription('');
+    setManualCost('0');
     setStatus({ tone: 'success', message: `Event added: ${title}` });
   }
 
@@ -141,7 +166,6 @@ export default function ChatUIApp() {
             onMessageChange={setMessage}
             onAsk={askQuestion}
           />
-          <StatusCard status={status} />
         </section>
 
         <div className="calendar-container">
@@ -155,16 +179,34 @@ export default function ChatUIApp() {
           <form className="manual-event-form" onSubmit={handleManualEventSubmit}>
             <h2>Add Event</h2>
             <p>Click and drag a time slot to prefill the date range, or enter it manually.</p>
-            <label className="field field--wide">
-              <span>Title</span>
-              <input
-                type="text"
-                value={manualTitle}
-                onChange={(nextEvent) => setManualTitle(nextEvent.target.value)}
-                placeholder="Dinner reservation"
-                required
-              />
-            </label>
+            <div className="manual-event-grid">
+              <label className="field field--wide">
+                <span>Title</span>
+                <input
+                  type="text"
+                  value={manualTitle}
+                  onChange={(nextEvent) => setManualTitle(nextEvent.target.value)}
+                  placeholder="Dinner reservation"
+                  required
+                />
+              </label>
+              <label className="field">
+                <span>Cost ({CURRENCY_SYMBOL})</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={manualCost}
+                  onChange={(nextEvent) => setManualCost(nextEvent.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === '-' || e.key === '+' || e.key === 'e' || e.key === 'E') {
+                      e.preventDefault();
+                    }
+                  }}
+                  required
+                />
+              </label>
+            </div>
             <div className="manual-event-grid">
               <label className="field">
                 <span>Start</span>
@@ -197,6 +239,15 @@ export default function ChatUIApp() {
             <div className="action-row">
               <button type="submit">Add Event To Calendar</button>
               <div className="action-row__history">
+                <button
+                  type="button"
+                  className="button--secondary"
+                  onClick={handleExportAction}
+                  disabled={events.length === 0}
+                  title="Download all visible events as .ics"
+                >
+                  Export .ics
+                </button>
                 <button
                   type="button"
                   className="button--secondary"

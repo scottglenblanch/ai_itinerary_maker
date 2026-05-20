@@ -19,6 +19,7 @@ export type CalendarEvent = {
   start: Date;
   end: Date;
   desc?: string;
+  cost: number;
 };
 
 export type CreateCalendarEventInput = {
@@ -26,6 +27,7 @@ export type CreateCalendarEventInput = {
   start: Date;
   end: Date;
   desc?: string;
+  cost: number;
 };
 
 export type CalendarSlotSelection = {
