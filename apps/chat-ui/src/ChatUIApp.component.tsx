@@ -166,6 +166,7 @@ export default function ChatUIApp() {
             onMessageChange={setMessage}
             onAsk={askQuestion}
           />
+          <HistoryPanel history={history} historyMessage={historyMessage} expandedIndex={expandedIndex} onToggleExpanded={setExpandedIndex} />
         </section>
 
         <div className="calendar-container">
@@ -271,8 +272,6 @@ export default function ChatUIApp() {
           </form>
         </div>
       </div>
-
-      <HistoryPanel history={history} historyMessage={historyMessage} expandedIndex={expandedIndex} onToggleExpanded={setExpandedIndex} />
     </main>
   );
 }

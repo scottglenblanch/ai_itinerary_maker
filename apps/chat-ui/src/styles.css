@@ -152,8 +152,7 @@ a {
   min-height: 92px;
 }
 
-.hero-panel,
-.history-panel {
+.hero-panel {
   background: var(--card);
   backdrop-filter: blur(18px);
   border: 1px solid var(--border);
@@ -163,6 +162,12 @@ a {
 
 .hero-panel {
   padding: 28px;
+}
+
+.history-panel {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
 }
 
 .eyebrow {
@@ -326,10 +331,6 @@ button:disabled {
   border-color: rgba(162, 52, 52, 0.24);
 }
 
-.history-panel {
-  padding: 22px;
-}
-
 .history-header {
   display: grid;
   gap: 8px;
@@ -419,17 +420,12 @@ button:disabled {
     padding-bottom: 28px;
   }
 
-  .hero-panel,
-  .history-panel {
+  .hero-panel {
     border-radius: 20px;
   }
 
   .hero-panel {
     padding: 20px;
-  }
-
-  .history-panel {
-    padding: 18px;
   }
 
   h1 {
