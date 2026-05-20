@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Calendar, momentLocalizer } from 'react-big-calendar';
 import moment from 'moment';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
@@ -16,6 +16,20 @@ export default function EventCalendar({
 }: EventCalendarProps) {
   const [date, setDate] = useState(new Date());
   const [view, setView] = useState<CalendarView>('month');
+  const previousEventCountRef = useRef(events.length);
+
+  useEffect(() => {
+    const previousCount = previousEventCountRef.current;
+    if (events.length > previousCount) {
+      const latestEvent = events[events.length - 1];
+      if (latestEvent?.start instanceof Date && !Number.isNaN(latestEvent.start.getTime())) {
+        // Keep the user's current view mode but jump to the newest event's date.
+        setDate(latestEvent.start);
+      }
+    }
+
+    previousEventCountRef.current = events.length;
+  }, [events]);
 
   const handleNavigate = (nextDate: Date, nextView: string | undefined, action: string) => {
     const resolvedView = (nextView ?? view) as CalendarView;

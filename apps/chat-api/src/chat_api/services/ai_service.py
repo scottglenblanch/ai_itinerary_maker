@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, TypedDict
 
 from openai import OpenAI
+from dateutil import parser as date_parser
 from redis import Redis
 
 from chat_api.services.configuration_service import ConfigurationService
@@ -290,9 +291,9 @@ class AIService:
                 cost = float(cost) if isinstance(cost, (int, float)) else 0
 
             if all_day:
-                start_date = self._parse_iso_date(start_raw)
+                start_date = self._parse_date(start_raw)
                 if isinstance(end_raw, str) and end_raw.strip():
-                    end_date = self._parse_iso_date(end_raw)
+                    end_date = self._parse_date(end_raw)
                 else:
                     end_date = start_date
 
@@ -309,9 +310,9 @@ class AIService:
                 normalized_events.append(event_data)
                 continue
 
-            start_dt = self._parse_iso_datetime(start_raw)
+            start_dt = self._parse_datetime(start_raw)
             if isinstance(end_raw, str) and end_raw.strip():
-                end_dt = self._parse_iso_datetime(end_raw)
+                end_dt = self._parse_datetime(end_raw, fallback_date=start_dt)
             else:
                 end_dt = start_dt + timedelta(hours=1)
 
@@ -340,25 +341,37 @@ class AIService:
         cleaned = cleaned.strip(".-")
         return cleaned or "itinerary"
 
-    def _parse_iso_date(self, value: str) -> datetime.date:
+    def _normalize_datetime_text(self, value: str) -> str:
+        # Remove ordinal suffixes so values like "May 20th" parse cleanly.
+        normalized = re.sub(r"(\d+)(st|nd|rd|th)\b", r"\1", value.strip(), flags=re.IGNORECASE)
+        return re.sub(r"\s+", " ", normalized)
+
+    def _parse_date(self, value: str) -> datetime.date:
         date_text = value.strip()
         if "T" in date_text:
-            return self._parse_iso_datetime(date_text).date()
+            return self._parse_datetime(date_text).date()
 
         try:
             return datetime.strptime(date_text, "%Y-%m-%d").date()
-        except ValueError as exc:
+        except ValueError:
+            pass
+
+        normalized = self._normalize_datetime_text(date_text)
+        try:
+            parsed = date_parser.parse(normalized, fuzzy=True)
+            return parsed.date()
+        except (ValueError, OverflowError) as exc:
             raise ValueError(f"Invalid date format: {value}") from exc
 
-    def _parse_iso_datetime(self, value: str) -> datetime:
+    def _parse_datetime(self, value: str, fallback_date: datetime | None = None) -> datetime:
         text = value.strip()
         if text.endswith("Z"):
             text = text[:-1] + "+00:00"
 
         try:
             parsed = datetime.fromisoformat(text)
-        except ValueError as exc:
-            raise ValueError(f"Invalid datetime format: {value}") from exc
+        except ValueError:
+            parsed = self._parse_natural_datetime(value, fallback_date)
 
         if parsed.tzinfo is None:
             parsed = parsed.replace(tzinfo=timezone.utc)
@@ -366,6 +379,27 @@ class AIService:
             parsed = parsed.astimezone(timezone.utc)
 
         return parsed
+
+    def _parse_natural_datetime(self, value: str, fallback_date: datetime | None = None) -> datetime:
+        normalized = self._normalize_datetime_text(value)
+        default_dt = fallback_date or datetime.now(timezone.utc)
+        default_naive = default_dt.replace(tzinfo=None, hour=0, minute=0, second=0, microsecond=0)
+
+        try:
+            return date_parser.parse(normalized, default=default_naive, fuzzy=False)
+        except (ValueError, OverflowError):
+            pass
+
+        try:
+            return date_parser.parse(normalized, default=default_naive, fuzzy=True)
+        except (ValueError, OverflowError) as exc:
+            raise ValueError(f"Invalid datetime format: {value}") from exc
+
+    def _parse_iso_date(self, value: str) -> datetime.date:
+        return self._parse_date(value)
+
+    def _parse_iso_datetime(self, value: str) -> datetime:
+        return self._parse_datetime(value)
 
     def _append_chat_history(self, username: str, question: str, answer: str) -> None:
         chat_object = {
