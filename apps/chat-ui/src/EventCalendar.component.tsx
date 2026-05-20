@@ -30,7 +30,7 @@ export default function EventCalendar({
   };
 
   return (
-    <div style={{ height: 600 }}>
+    <div className="calendar-frame">
       <Calendar
         localizer={localizer}
         events={events}

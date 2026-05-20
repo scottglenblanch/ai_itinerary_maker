@@ -44,7 +44,7 @@ a {
 }
 
 .page-shell {
-  width: min(1180px, calc(100% - 32px));
+  width: calc(100% - 32px);
   margin: 0 auto;
   padding: 32px 0 48px;
   display: grid;
@@ -58,14 +58,15 @@ a {
   display: flex;
   gap: 20px;
   align-items: stretch;
+  justify-content: stretch;
 }
 
 .hero-panel {
-  flex: 1.4;
+  flex: 1;
 }
 
 .calendar-container {
-  flex: 0.9;
+  flex: 2;
   min-width: 320px;
   background: var(--card);
   backdrop-filter: blur(18px);
@@ -73,6 +74,12 @@ a {
   border-radius: 24px;
   box-shadow: var(--shadow);
   padding: 20px;
+}
+
+.calendar-frame {
+  height: 70vh;
+  min-height: 520px;
+  max-height: 860px;
 }
 
 .hero-panel,
@@ -347,5 +354,10 @@ button:disabled {
 
   button {
     width: 100%;
+  }
+
+  .calendar-frame {
+    height: 58vh;
+    min-height: 420px;
   }
 }
