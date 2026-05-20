@@ -62,43 +62,24 @@ class AIService:
         ics_payload_json: str | None = None
 
         if choice_message.tool_calls:
-            assistant_tool_message = {
-                "role": "assistant",
-                "content": choice_message.content or "",
-                "tool_calls": [
-                    {
-                        "id": tool_call.id,
-                        "type": tool_call.type,
-                        "function": {
-                            "name": tool_call.function.name,
-                            "arguments": tool_call.function.arguments,
-                        },
-                    }
-                    for tool_call in choice_message.tool_calls
-                ],
-            }
-            messages_request.append(assistant_tool_message)
-
-            for tool_call in choice_message.tool_calls:
-                tool_result = self._run_tool_call(tool_call, username)
-                if isinstance(tool_result, dict) and tool_result.get("ics_payload_json"):
-                    ics_payload_json = str(tool_result["ics_payload_json"])
-
-                messages_request.append(
-                    {
-                        "role": "tool",
-                        "tool_call_id": tool_call.id,
-                        "content": json.dumps(tool_result),
-                    }
-                )
-
-            follow_up_response = self.ai_client.chat.completions.create(
-                model=ai_model,
-                messages=messages_request,
+            message_content, ics_payload_json = self._process_tool_calls(
+                ai_model=ai_model,
+                username=username,
+                messages_request=messages_request,
+                choice_message=choice_message,
             )
-            message_content = follow_up_response.choices[0].message.content or ""
         else:
             message_content = choice_message.content or ""
+            if self._should_force_calendar_generation(message, message_content):
+                forced_content, forced_ics_payload_json = self._force_calendar_generation(
+                    ai_model=ai_model,
+                    username=username,
+                    base_messages=messages_request,
+                    assistant_message=message_content,
+                )
+                if forced_ics_payload_json:
+                    ics_payload_json = forced_ics_payload_json
+                    message_content = forced_content or message_content
 
         self._append_chat_history(username, message, message_content)
 
@@ -106,6 +87,100 @@ class AIService:
             "response": message_content,
             "ics_payload_json": ics_payload_json,
         }
+
+    def _process_tool_calls(
+        self,
+        ai_model: str,
+        username: str,
+        messages_request: list[dict[str, Any]],
+        choice_message: Any,
+    ) -> tuple[str, str | None]:
+        assistant_tool_message = {
+            "role": "assistant",
+            "content": choice_message.content or "",
+            "tool_calls": [
+                {
+                    "id": tool_call.id,
+                    "type": tool_call.type,
+                    "function": {
+                        "name": tool_call.function.name,
+                        "arguments": tool_call.function.arguments,
+                    },
+                }
+                for tool_call in choice_message.tool_calls
+            ],
+        }
+        messages_request.append(assistant_tool_message)
+
+        ics_payload_json: str | None = None
+        for tool_call in choice_message.tool_calls:
+            tool_result = self._run_tool_call(tool_call, username)
+            if isinstance(tool_result, dict) and tool_result.get("ics_payload_json"):
+                ics_payload_json = str(tool_result["ics_payload_json"])
+
+            messages_request.append(
+                {
+                    "role": "tool",
+                    "tool_call_id": tool_call.id,
+                    "content": json.dumps(tool_result),
+                }
+            )
+
+        follow_up_response = self.ai_client.chat.completions.create(
+            model=ai_model,
+            messages=messages_request,
+        )
+        message_content = follow_up_response.choices[0].message.content or ""
+        return message_content, ics_payload_json
+
+    def _force_calendar_generation(
+        self,
+        ai_model: str,
+        username: str,
+        base_messages: list[dict[str, Any]],
+        assistant_message: str,
+    ) -> tuple[str, str | None]:
+        messages_request = [
+            *base_messages,
+            {"role": "assistant", "content": assistant_message},
+            {
+                "role": "user",
+                "content": "Extract confirmed itinerary events from this conversation and call generate_ics_payload_json now. Include at least one event only if specific details are known.",
+            },
+        ]
+
+        forced_response = self.ai_client.chat.completions.create(
+            model=ai_model,
+            messages=messages_request,
+            tools=self._get_tool_definitions(),
+            tool_choice={"type": "function", "function": {"name": "generate_ics_payload_json"}},
+        )
+
+        forced_choice_message = forced_response.choices[0].message
+        if not forced_choice_message.tool_calls:
+            return assistant_message, None
+
+        return self._process_tool_calls(
+            ai_model=ai_model,
+            username=username,
+            messages_request=messages_request,
+            choice_message=forced_choice_message,
+        )
+
+    def _should_force_calendar_generation(self, user_message: str, assistant_message: str) -> bool:
+        combined = f"{user_message} {assistant_message}".lower()
+        calendar_keywords = [
+            "add",
+            "itinerary",
+            "plan",
+            "schedule",
+            "calendar",
+            "event",
+            "book",
+            "day",
+            "trip",
+        ]
+        return any(keyword in combined for keyword in calendar_keywords)
 
     def _get_tool_definitions(self) -> list[dict[str, Any]]:
         return [
@@ -140,6 +215,10 @@ class AIService:
                                         "all_day": {"type": "boolean"},
                                         "location": {"type": "string"},
                                         "description": {"type": "string"},
+                                        "cost": {
+                                            "type": "number",
+                                            "description": "Estimated cost in USD for this event (optional).",
+                                        },
                                     },
                                     "required": ["title", "start"],
                                 },
@@ -206,6 +285,9 @@ class AIService:
             all_day = bool(raw_event.get("all_day", False))
             location = str(raw_event.get("location") or "")
             description = str(raw_event.get("description") or "")
+            cost = raw_event.get("cost")
+            if cost is not None:
+                cost = float(cost) if isinstance(cost, (int, float)) else 0
 
             if all_day:
                 start_date = self._parse_iso_date(start_raw)
@@ -214,16 +296,17 @@ class AIService:
                 else:
                     end_date = start_date
 
-                normalized_events.append(
-                    {
-                        "title": title,
-                        "start": start_date.isoformat(),
-                        "end": end_date.isoformat(),
-                        "all_day": True,
-                        "location": location,
-                        "description": description,
-                    }
-                )
+                event_data = {
+                    "title": title,
+                    "start": start_date.isoformat(),
+                    "end": end_date.isoformat(),
+                    "all_day": True,
+                    "location": location,
+                    "description": description,
+                }
+                if cost is not None:
+                    event_data["cost"] = cost
+                normalized_events.append(event_data)
                 continue
 
             start_dt = self._parse_iso_datetime(start_raw)
@@ -232,16 +315,17 @@ class AIService:
             else:
                 end_dt = start_dt + timedelta(hours=1)
 
-            normalized_events.append(
-                {
-                    "title": title,
-                    "start": start_dt.isoformat(),
-                    "end": end_dt.isoformat(),
-                    "all_day": False,
-                    "location": location,
-                    "description": description,
-                }
-            )
+            event_data = {
+                "title": title,
+                "start": start_dt.isoformat(),
+                "end": end_dt.isoformat(),
+                "all_day": False,
+                "location": location,
+                "description": description,
+            }
+            if cost is not None:
+                event_data["cost"] = cost
+            normalized_events.append(event_data)
 
         payload = {
             "calendar_name": calendar_name,

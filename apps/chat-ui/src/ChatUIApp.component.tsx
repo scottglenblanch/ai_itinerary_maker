@@ -25,9 +25,16 @@ export default function ChatUIApp() {
   const [manualEnd, setManualEnd] = useState('');
   const [manualDescription, setManualDescription] = useState('');
   const [manualCost, setManualCost] = useState('0');
+  const [aiEventsToast, setAiEventsToast] = useState<string | null>(null);
   const { status, setStatus, handleCalendarNavigate, handleCalendarViewChange } = useCalendarStatus();
 
   const { history, historyMessage, expandedIndex, setExpandedIndex, refreshHistory } = useChatHistory(username);
+
+  const handleAiEventsAdded = useCallback((count: number) => {
+    const label = count === 1 ? '1 event added to calendar by AI' : `${count} events added to calendar by AI`;
+    setAiEventsToast(label);
+    setTimeout(() => setAiEventsToast(null), 5000);
+  }, []);
 
   const { isSubmitting, events, canAsk, canUndo, canRedo, askQuestion, addManualEvent, removeEvent, undoEvents, redoEvents } =
     useChatAssistant({
@@ -36,6 +43,7 @@ export default function ChatUIApp() {
       clearMessage: () => setMessage(''),
       refreshHistory,
       setStatus,
+      onAiEventsAdded: handleAiEventsAdded,
     });
 
   const handleUndoAction = useCallback(() => {
@@ -170,6 +178,12 @@ export default function ChatUIApp() {
         </section>
 
         <div className="calendar-container">
+          {aiEventsToast && (
+            <div className="ai-events-toast" role="status">
+              <span>{aiEventsToast}</span>
+              <button type="button" className="ai-events-toast__dismiss" onClick={() => setAiEventsToast(null)} aria-label="Dismiss">×</button>
+            </div>
+          )}
           <EventCalendar
             events={events}
             onDeleteEvent={handleDeleteEvent}

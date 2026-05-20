@@ -19,7 +19,7 @@ export type CalendarEvent = {
   start: Date;
   end: Date;
   desc?: string;
-  cost: number;
+  cost?: number;
 };
 
 export type CreateCalendarEventInput = {

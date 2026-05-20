@@ -9,6 +9,7 @@ type UseChatAssistantParams = {
   clearMessage: () => void;
   refreshHistory: (loadingMessage?: string) => Promise<void>;
   setStatus: Dispatch<SetStateAction<StatusState>>;
+  onAiEventsAdded?: (count: number) => void;
 };
 
 type IcsPayloadEvent = {
@@ -16,6 +17,7 @@ type IcsPayloadEvent = {
   start?: string;
   end?: string;
   description?: string;
+  cost?: number;
 };
 
 type IcsPayload = {
@@ -119,13 +121,14 @@ function parseIcsPayloadJson(payloadJson: string): CalendarEvent[] {
       start,
       end,
       desc: typeof event.description === 'string' ? event.description : undefined,
+      cost: typeof event.cost === 'number' ? event.cost : undefined,
     });
   }
 
   return events;
 }
 
-export function useChatAssistant({ username, message, clearMessage, refreshHistory, setStatus }: UseChatAssistantParams) {
+export function useChatAssistant({ username, message, clearMessage, refreshHistory, setStatus, onAiEventsAdded }: UseChatAssistantParams) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [eventHistory, dispatchEventHistory] = useReducer(eventHistoryReducer, initialEventHistoryState);
   const events = eventHistory.present;
@@ -156,11 +159,23 @@ export function useChatAssistant({ username, message, clearMessage, refreshHisto
       setStatus({ tone: 'success', message: data.response || '(No response field returned)' });
       clearMessage();
 
+      console.log('Chat response:', data);
+      console.log('ICS payload JSON present:', !!data.ics_payload_json);
+
       if (data.ics_payload_json) {
+        console.log('Parsing ICS payload:', data.ics_payload_json);
         const parsedEvents = parseIcsPayloadJson(data.ics_payload_json);
+        console.log('Parsed events:', parsedEvents);
         if (parsedEvents.length > 0) {
           applyEventMutation((prevEvents) => [...prevEvents, ...parsedEvents]);
+          onAiEventsAdded?.(parsedEvents.length);
+        } else {
+          console.warn('No events parsed from ICS payload');
+          setStatus({ tone: 'error', message: 'AI returned calendar data, but it could not be parsed into events.' });
         }
+      } else {
+        console.log('No ICS payload in response - AI did not call generate_ics_payload_json');
+        setStatus({ tone: 'error', message: 'AI response did not include calendar events. Please ask it to add specific events with dates.' });
       }
 
       await refreshHistory('Refreshing history...');
