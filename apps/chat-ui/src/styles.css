@@ -82,6 +82,76 @@ a {
   max-height: 860px;
 }
 
+.calendar-event-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+}
+
+.calendar-event-item__title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.calendar-event-item__delete {
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.65);
+  background: rgba(8, 12, 11, 0.28);
+  color: #fff;
+  font-size: 0.75rem;
+  line-height: 1;
+  box-shadow: none;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease, background-color 120ms ease;
+}
+
+.rbc-event:hover .calendar-event-item__delete,
+.rbc-event:focus-within .calendar-event-item__delete {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.calendar-event-item__delete:hover {
+  transform: none;
+  box-shadow: none;
+  background: rgba(8, 12, 11, 0.52);
+}
+
+.manual-event-form {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+  display: grid;
+  gap: 12px;
+}
+
+.manual-event-form h2 {
+  font-size: 1.05rem;
+}
+
+.manual-event-form p {
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.manual-event-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.manual-event-form textarea {
+  min-height: 92px;
+}
+
 .hero-panel,
 .history-panel {
   background: var(--card);
@@ -186,6 +256,24 @@ textarea {
   flex-wrap: wrap;
   gap: 12px;
   align-items: center;
+}
+
+.action-row__history {
+  margin-left: auto;
+  display: flex;
+  gap: 10px;
+}
+
+.button--secondary {
+  background: rgba(18, 32, 26, 0.12);
+  color: var(--text);
+  border: 1px solid rgba(18, 32, 26, 0.2);
+  box-shadow: none;
+}
+
+.button--secondary:hover:not(:disabled) {
+  box-shadow: none;
+  background: rgba(18, 32, 26, 0.18);
 }
 
 button {
@@ -352,6 +440,11 @@ button:disabled {
     align-items: stretch;
   }
 
+  .action-row__history {
+    margin-left: 0;
+    width: 100%;
+  }
+
   button {
     width: 100%;
   }
@@ -359,5 +452,9 @@ button:disabled {
   .calendar-frame {
     height: 58vh;
     min-height: 420px;
+  }
+
+  .manual-event-grid {
+    grid-template-columns: 1fr;
   }
 }

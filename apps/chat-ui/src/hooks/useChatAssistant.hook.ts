@@ -1,7 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useReducer, useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import { askChatQuestion } from '../services/chatApi.service';
-import type { CalendarEvent, StatusState } from '../types';
+import type { CalendarEvent, CreateCalendarEventInput, StatusState } from '../types';
 
 type UseChatAssistantParams = {
   username: string;
@@ -21,6 +21,70 @@ type IcsPayloadEvent = {
 type IcsPayload = {
   events?: IcsPayloadEvent[];
 };
+
+type EventHistoryState = {
+  past: CalendarEvent[][];
+  present: CalendarEvent[];
+  future: CalendarEvent[][];
+};
+
+type EventHistoryAction =
+  | { type: 'apply'; mutateEvents: (currentEvents: CalendarEvent[]) => CalendarEvent[] }
+  | { type: 'undo' }
+  | { type: 'redo' };
+
+const initialEventHistoryState: EventHistoryState = {
+  past: [],
+  present: [],
+  future: [],
+};
+
+function eventHistoryReducer(state: EventHistoryState, action: EventHistoryAction): EventHistoryState {
+  if (action.type === 'apply') {
+    const nextEvents = action.mutateEvents(state.present);
+
+    if (nextEvents === state.present) {
+      return state;
+    }
+
+    return {
+      past: [...state.past, state.present],
+      present: nextEvents,
+      future: [],
+    };
+  }
+
+  if (action.type === 'undo') {
+    if (state.past.length === 0) {
+      return state;
+    }
+
+    const previousEvents = state.past[state.past.length - 1];
+    return {
+      past: state.past.slice(0, -1),
+      present: previousEvents,
+      future: [...state.future, state.present],
+    };
+  }
+
+  if (state.future.length === 0) {
+    return state;
+  }
+
+  const nextEvents = state.future[state.future.length - 1];
+  return {
+    past: [...state.past, state.present],
+    present: nextEvents,
+    future: state.future.slice(0, -1),
+  };
+}
+
+let generatedEventIdCounter = 0;
+
+function createGeneratedEventId(prefix: string) {
+  generatedEventIdCounter += 1;
+  return `${prefix}-${Date.now()}-${generatedEventIdCounter}`;
+}
 
 function parseIcsPayloadJson(payloadJson: string): CalendarEvent[] {
   let parsed: IcsPayload;
@@ -50,7 +114,7 @@ function parseIcsPayloadJson(payloadJson: string): CalendarEvent[] {
     }
 
     events.push({
-      id: index,
+      id: createGeneratedEventId(`ai-${index}`),
       title: event.title,
       start,
       end,
@@ -63,12 +127,20 @@ function parseIcsPayloadJson(payloadJson: string): CalendarEvent[] {
 
 export function useChatAssistant({ username, message, clearMessage, refreshHistory, setStatus }: UseChatAssistantParams) {
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [events, setEvents] = useState<CalendarEvent[]>([]);
+  const [eventHistory, dispatchEventHistory] = useReducer(eventHistoryReducer, initialEventHistoryState);
+  const events = eventHistory.present;
 
   const canAsk = useMemo(
     () => username.trim().length > 0 && message.trim().length > 0 && !isSubmitting,
     [username, message, isSubmitting],
   );
+
+  const canUndo = eventHistory.past.length > 0;
+  const canRedo = eventHistory.future.length > 0;
+
+  function applyEventMutation(mutateEvents: (currentEvents: CalendarEvent[]) => CalendarEvent[]) {
+    dispatchEventHistory({ type: 'apply', mutateEvents });
+  }
 
   async function askQuestion() {
     if (!canAsk) {
@@ -87,7 +159,7 @@ export function useChatAssistant({ username, message, clearMessage, refreshHisto
       if (data.ics_payload_json) {
         const parsedEvents = parseIcsPayloadJson(data.ics_payload_json);
         if (parsedEvents.length > 0) {
-          setEvents((prevEvents) => [...prevEvents, ...parsedEvents]);
+          applyEventMutation((prevEvents) => [...prevEvents, ...parsedEvents]);
         }
       }
 
@@ -100,10 +172,70 @@ export function useChatAssistant({ username, message, clearMessage, refreshHisto
     }
   }
 
+  function addManualEvent(eventInput: CreateCalendarEventInput) {
+    applyEventMutation((prevEvents) => [
+      ...prevEvents,
+      {
+        id: createGeneratedEventId('manual'),
+        title: eventInput.title,
+        start: eventInput.start,
+        end: eventInput.end,
+        desc: eventInput.desc,
+      },
+    ]);
+  }
+
+  function removeEvent(eventToRemove: CalendarEvent) {
+    applyEventMutation((prevEvents) => {
+      const remainingEvents = prevEvents.filter((existingEvent) => {
+        if (eventToRemove.id != null && existingEvent.id != null) {
+          return existingEvent.id !== eventToRemove.id;
+        }
+
+        return !(
+          existingEvent.title === eventToRemove.title &&
+          existingEvent.start.getTime() === eventToRemove.start.getTime() &&
+          existingEvent.end.getTime() === eventToRemove.end.getTime() &&
+          existingEvent.desc === eventToRemove.desc
+        );
+      });
+
+      if (remainingEvents.length === prevEvents.length) {
+        return prevEvents;
+      }
+
+      return remainingEvents;
+    });
+  }
+
+  function undoEvents() {
+    if (!canUndo) {
+      return false;
+    }
+
+    dispatchEventHistory({ type: 'undo' });
+    return true;
+  }
+
+  function redoEvents() {
+    if (!canRedo) {
+      return false;
+    }
+
+    dispatchEventHistory({ type: 'redo' });
+    return true;
+  }
+
   return {
     isSubmitting,
     events,
     canAsk,
+    canUndo,
+    canRedo,
     askQuestion,
+    addManualEvent,
+    removeEvent,
+    undoEvents,
+    redoEvents,
   };
 }

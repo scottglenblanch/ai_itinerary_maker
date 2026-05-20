@@ -21,6 +21,18 @@ export type CalendarEvent = {
   desc?: string;
 };
 
+export type CreateCalendarEventInput = {
+  title: string;
+  start: Date;
+  end: Date;
+  desc?: string;
+};
+
+export type CalendarSlotSelection = {
+  start: Date;
+  end: Date;
+};
+
 export type CalendarView = 'month' | 'week' | 'day' | 'agenda';
 
 export type CalendarNavigateAction = 'PREV' | 'NEXT' | 'TODAY' | 'DATE';
@@ -28,7 +40,8 @@ export type CalendarNavigateAction = 'PREV' | 'NEXT' | 'TODAY' | 'DATE';
 export type EventCalendarProps = {
   events?: CalendarEvent[];
   onSelectEvent?: (event: CalendarEvent) => void;
-  onSelectSlot?: (slotInfo: { start: Date; end: Date }) => void;
+  onDeleteEvent?: (event: CalendarEvent) => void;
+  onSelectSlot?: (slotInfo: CalendarSlotSelection) => void;
   onNavigateAction?: (action: CalendarNavigateAction, date: Date, view: CalendarView) => void;
   onViewChange?: (view: CalendarView) => void;
 };

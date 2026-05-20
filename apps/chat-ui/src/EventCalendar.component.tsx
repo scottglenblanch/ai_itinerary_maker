@@ -2,13 +2,14 @@ import { useState } from 'react';
 import { Calendar, momentLocalizer } from 'react-big-calendar';
 import moment from 'moment';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
-import type { CalendarNavigateAction, CalendarView, EventCalendarProps } from './types';
+import type { CalendarEvent, CalendarNavigateAction, CalendarView, EventCalendarProps } from './types';
 
 const localizer = momentLocalizer(moment);
 
 export default function EventCalendar({
   events = [],
   onSelectEvent,
+  onDeleteEvent,
   onSelectSlot,
   onNavigateAction,
   onViewChange,
@@ -29,6 +30,23 @@ export default function EventCalendar({
     onViewChange?.(resolvedView);
   };
 
+  const EventItem = ({ event, title }: { event: CalendarEvent; title: string }) => (
+    <div className="calendar-event-item">
+      <span className="calendar-event-item__title">{title}</span>
+      <button
+        type="button"
+        className="calendar-event-item__delete"
+        aria-label={`Delete ${event.title}`}
+        onClick={(nextEvent) => {
+          nextEvent.stopPropagation();
+          onDeleteEvent?.(event);
+        }}
+      >
+        x
+      </button>
+    </div>
+  );
+
   return (
     <div className="calendar-frame">
       <Calendar
@@ -40,7 +58,10 @@ export default function EventCalendar({
         endAccessor="end"
         style={{ height: '100%' }}
         onSelectEvent={onSelectEvent}
-        onSelectSlot={onSelectSlot}
+        components={{
+          event: EventItem,
+        }}
+        onSelectSlot={(slotInfo) => onSelectSlot?.({ start: slotInfo.start as Date, end: slotInfo.end as Date })}
         onNavigate={handleNavigate}
         onView={handleView}
         selectable
